@@ -49,10 +49,22 @@ func validateOptions(o options) error {
 func getRouter(ctx context.Context) http.Handler {
 	router := gin.Default()
 	router.GET("/", func(c *gin.Context) {
-		time.Sleep(5 * time.Second)
 		c.String(http.StatusOK, "OK")
 	})
+	router.GET("/sleep", func(c *gin.Context) {
+		d, err := time.ParseDuration(c.DefaultQuery("duration", "0s"))
+		if err != nil {
+			c.String(http.StatusBadRequest, "bad request: %w", err)
+			return
+		}
+		someFunc(d)
+		c.String(http.StatusOK, "slept %s", d)
+	})
 	return router
+}
+
+func someFunc(d time.Duration) {
+	time.Sleep(d)
 }
 
 func main() {
