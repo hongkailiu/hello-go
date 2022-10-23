@@ -10,6 +10,8 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/test-infra/prow/logrusutil"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 type options struct {
@@ -29,7 +31,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.kubeconfig, "kubeconfig", "", "Path to the kubeconfig file to use.")
 	fs.StringVar(&o.token, "token", "", "The token to use in the kubeconfig file.")
-	fs.StringVar(&o.tokenFile, "token-file", "", "Path to the token file to use in the kubeconfig file.")
+	fs.StringVar(&o.tokenFile, "token-file", "", "Path to the token file to use in the kubeconfig file. If it is a file name containing no path separator, it will be saved under the same directory of the kubeconfig file")
 	fs.StringVar(&o.server, "server", "", "The Kubernetes API server.")
 	fs.StringVar(&o.serviceAccount, "service-account", "", "The service account.")
 	fs.StringVar(&o.namespace, "namespace", "ci", "The namespace of the service account.")
@@ -45,8 +47,8 @@ func validateOptions(o options) error {
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
 	}
-	if o.token == "" {
-		return fmt.Errorf("--token must be specified")
+	if o.token == "" && o.tokenFile == "" {
+		return fmt.Errorf("either --token or --token-file must be specified")
 	}
 	if o.serviceAccount == "" {
 		return fmt.Errorf("--service-account must be specified")
@@ -111,8 +113,12 @@ func main() {
 	if err := clientcmd.WriteToFile(createKubeconfig(o.server, o.cluster, o.namespace, o.token, o.tokenFile), o.kubeconfig); err != nil {
 		log.WithField("kubeconfig", o.kubeconfig).WithError(err).Fatal("failed to write to the kubeconfig file")
 	}
-	if o.tokenFile != "" {
-		if err := ioutil.WriteFile(o.tokenFile, []byte(o.token), 0600); err != nil {
+	if o.tokenFile != "" && o.token != "" {
+		path := o.tokenFile
+		if strings.IndexByte(o.tokenFile, filepath.Separator) == -1 {
+			path = filepath.Join(filepath.Dir(o.kubeconfig), o.tokenFile)
+		}
+		if err := ioutil.WriteFile(path, []byte(o.token), 0600); err != nil {
 			log.WithField("tokenFile", o.tokenFile).WithError(err).Fatal("failed to write to the token file")
 		}
 	}
