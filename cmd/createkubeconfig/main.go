@@ -49,9 +49,6 @@ func validateOptions(o options) error {
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
 	}
-	if o.token == "" && o.tokenFile == "" {
-		return fmt.Errorf("either --token or --token-file must be specified")
-	}
 	if o.serviceAccount == "" {
 		return fmt.Errorf("--service-account must be specified")
 	}
@@ -71,12 +68,14 @@ func validateOptions(o options) error {
 	return nil
 }
 
-func createKubeconfig(server, cluster, namespace, token, tokenFile string) clientcmdapi.Config {
+func createKubeconfig(server, cluster, namespace, sa, token, tokenFile string) clientcmdapi.Config {
 	authInfo := &clientcmdapi.AuthInfo{}
 	if tokenFile != "" {
 		authInfo.TokenFile = tokenFile
-	} else {
+	} else if token != "" {
 		authInfo.Token = token
+	} else {
+		authInfo.TokenFile = fmt.Sprintf("sa.%s.%s.token.txt", sa, cluster)
 	}
 
 	return clientcmdapi.Config{
@@ -89,12 +88,12 @@ func createKubeconfig(server, cluster, namespace, token, tokenFile string) clien
 			cluster: {
 				Cluster:   cluster,
 				Namespace: namespace,
-				AuthInfo:  cluster,
+				AuthInfo:  sa,
 			},
 		},
 		CurrentContext: cluster,
 		AuthInfos: map[string]*clientcmdapi.AuthInfo{
-			cluster: authInfo,
+			sa: authInfo,
 		},
 	}
 }
@@ -112,7 +111,7 @@ func main() {
 	log.SetLevel(level)
 	logrusutil.ComponentInit()
 
-	if err := clientcmd.WriteToFile(createKubeconfig(o.server, o.cluster, o.namespace, o.token, o.tokenFile), o.kubeconfig); err != nil {
+	if err := clientcmd.WriteToFile(createKubeconfig(o.server, o.cluster, o.namespace, o.serviceAccount, o.token, o.tokenFile), o.kubeconfig); err != nil {
 		log.WithField("kubeconfig", o.kubeconfig).WithError(err).Fatal("failed to write to the kubeconfig file")
 	}
 	if o.tokenFile != "" && o.token != "" {
